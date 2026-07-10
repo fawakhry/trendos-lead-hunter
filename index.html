@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TrendOS | صياد العملاء</title>
+  <title>TrendOS | صياد العملاء Pro</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
@@ -45,8 +45,8 @@
       <header class="topbar">
         <div class="hero-copy">
           <div class="eyebrow">TrendOS Lead Hunter</div>
-          <h1>صياد العملاء</h1>
-          <p>مراجعة صفحات وجروبات فيسبوك، حفظ الفرص، وتحليلها بردود جاهزة لمطبعجي.</p>
+          <h1>صياد العملاء Pro</h1>
+          <p>مراقبة شبه أوتوماتيك آمنة: طابور بحث، فتح تلقائي، حفظ فرص، تحليل، وردود جاهزة لمطبعجي.</p>
         </div>
         <div class="target-mark" aria-hidden="true">
           <span>🎯</span>
@@ -70,11 +70,29 @@
           <button id="btnBackup" class="ghost">نسخة احتياطية JSON</button>
         </section>
 
+        <section class="panel watcher-panel" id="watcherPanel"></section>
+
+        <section class="panel pro-panel" id="proPanel"></section>
+
+        <section class="panel hot-leads-panel">
+          <div class="panel-header">
+            <div>
+              <h2>🔥 الفرص الساخنة والمتابعات</h2>
+              <p>أعلى الفرص، مواعيد المتابعة، والتنبيهات المهمة في مكان واحد.</p>
+            </div>
+            <div class="actions">
+              <button id="btnAskNotify" class="secondary">تفعيل إشعارات المتصفح</button>
+              <button id="btnTestSound" class="ghost">اختبار صوت</button>
+            </div>
+          </div>
+          <div id="hotLeadsBox" class="hot-leads-grid"></div>
+        </section>
+
         <section class="panel sources-panel">
           <div class="panel-header">
             <div>
               <h2>مصادر مستحقة للمراجعة</h2>
-              <p>كل مصدر عليه معاد مراجعة كل 30 دقيقة أو حسب الإعداد.</p>
+              <p>كل مصدر عليه معاد مراجعة حسب الإعداد: 10 دقائق، 15 دقيقة، أو أي مدة أكبر.</p>
             </div>
             <button id="btnAddSource" class="primary">+ مصدر جديد</button>
           </div>
@@ -193,7 +211,7 @@
           </select>
         </label>
         <label>كل كام دقيقة؟
-          <input id="newRefreshMinutes" type="number" min="10" value="30">
+          <input id="newRefreshMinutes" type="number" min="10" value="15">
         </label>
       </div>
       <label>الأولوية
@@ -202,6 +220,9 @@
           <option value="medium">متوسطة</option>
           <option value="low">منخفضة</option>
         </select>
+      </label>
+      <label>كلمات خاصة بالمصدر — اختياري
+        <textarea id="newSourceKeywords" rows="3" placeholder="مثال: مطبعة، مجات، استيكرات، ليزر"></textarea>
       </label>
       <div class="actions">
         <button value="cancel" class="secondary">إلغاء</button>

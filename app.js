@@ -1,4 +1,5 @@
 const CONFIG = window.LEAD_HUNTER_CONFIG || {};
+const WATCHER_KEY = 'trendos_lead_hunter_watcher_pro_v3';
 const LS_KEYS = {
   sources: 'trendos_lead_sources_v1',
   keywords: 'trendos_lead_keywords_v1',
@@ -45,6 +46,13 @@ function saveLocal() {
 }
 function escapeHtml(text='') { return String(text).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c])); }
 function isConfiguredApi() { return CONFIG.API_BASE_URL && CONFIG.API_TOKEN && !CONFIG.LOCAL_ONLY; }
+function getWatcherSettings() {
+  return load(WATCHER_KEY, { enabled: false, autoOpen: false, autoCycle: true, sound: true, lastAutoOpenAt: '', openGapSeconds: 75, maxTabsPerTick: 1 });
+}
+function saveWatcherSettings(settings) {
+  localStorage.setItem(WATCHER_KEY, JSON.stringify(settings));
+}
+let watcherTimer = null;
 
 async function api(action, payload = {}, method = 'POST') {
   if (!isConfiguredApi()) throw new Error('API غير مفعّل؛ الواجهة تعمل Local فقط.');
@@ -96,23 +104,63 @@ function getDueSources() {
     .sort((a,b) => priorityValue(b.priority) - priorityValue(a.priority));
 }
 function priorityValue(p) { return p === 'high' ? 3 : p === 'medium' ? 2 : 1; }
+function normalizeKeywordList(raw) {
+  return String(raw || '').split(/[،,\n]/).map(x => x.trim()).filter(Boolean);
+}
+function getSourceKeywords(source) {
+  const custom = normalizeKeywordList(source?.custom_keywords || '');
+  if (custom.length) return custom;
+  return state.keywords.filter(k => k.active !== false).sort((a,b) => b.score_weight - a.score_weight).map(k => k.keyword);
+}
+function getNextKeywordForSource(source) {
+  const list = getSourceKeywords(source);
+  if (!list.length) return 'مطبعة';
+  const i = Number(source.keyword_index || 0) % list.length;
+  return list[i];
+}
+function advanceKeywordIndex(source) {
+  const list = getSourceKeywords(source);
+  if (!list.length) return;
+  source.keyword_index = (Number(source.keyword_index || 0) + 1) % list.length;
+}
+function hashLead(text) {
+  return String(text || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 500);
+}
+function isDuplicateLead(postUrl, text) {
+  const url = String(postUrl || '').trim();
+  const h = hashLead(text);
+  return state.leads.some(l => (url && l.post_url === url) || (h && hashLead(l.captured_text) === h));
+}
 
 function renderStats() {
   const due = getDueSources().length;
   const hot = state.leads.filter(l => Number(l.lead_score || 0) >= 75 && l.status !== 'تحول لأوردر').length;
   const newLeads = state.leads.filter(l => l.status === 'جديد').length;
   const converted = state.leads.filter(l => l.status === 'تحول لأوردر').length;
+  const followups = state.leads.filter(l => l.follow_up_at && new Date(l.follow_up_at).getTime() <= Date.now() && l.status !== 'تحول لأوردر').length;
   document.getElementById('statsGrid').innerHTML = [
     ['المصادر النشطة', state.sources.filter(s => s.active !== false).length, '👥'],
     ['مصادر للمراجعة', due, '⏱'],
     ['فرص عالية', hot, '⭐'],
+    ['متابعات مستحقة', followups, '🔔'],
     ['تحولت لأوردر', converted, '✅']
   ].map(([label, value, icon]) => `<div class="stat-card"><em>${icon}</em><b>${value}</b><span>${label}</span></div>`).join('');
 }
 
 function buildFacebookSearchUrl(sourceUrl, keyword) {
   const q = encodeURIComponent(keyword);
-  // البحث العام في فيسبوك. في حالة المصدر Search يستخدم الرابط الأصلي، وإلا نفتح بحث عام بالكلمة + اسم المصدر.
+  const raw = String(sourceUrl || '').trim();
+  try {
+    const u = new URL(raw);
+    const parts = u.pathname.split('/').filter(Boolean);
+    const groupIndex = parts.indexOf('groups');
+    if (u.hostname.includes('facebook.com') && groupIndex >= 0 && parts[groupIndex + 1]) {
+      return `https://www.facebook.com/groups/${parts[groupIndex + 1]}/search/?q=${q}`;
+    }
+    if (u.hostname.includes('facebook.com') && parts.length && !['search','groups','watch','marketplace'].includes(parts[0])) {
+      return `https://www.facebook.com/${parts[0]}/search/?q=${q}`;
+    }
+  } catch {}
   return `https://www.facebook.com/search/posts/?q=${q}`;
 }
 
@@ -139,7 +187,7 @@ function renderDueSources() {
         <button class="ghost" onclick="markChecked('${s.source_id}')">تمت المراجعة</button>
       </div>
       <div class="search-buttons">
-        ${topKeywords.map(k => `<a target="_blank" rel="noopener" href="${buildFacebookSearchUrl(s.source_url, k.keyword)}"><button class="secondary">${escapeHtml(k.keyword)}</button></a>`).join('')}
+        ${getSourceKeywords(s).slice(0, 8).map(keyword => `<a target="_blank" rel="noopener" href="${buildFacebookSearchUrl(s.source_url, keyword)}"><button class="secondary">${escapeHtml(keyword)}</button></a>`).join('')}
       </div>
     </article>`).join('');
 }
@@ -274,7 +322,12 @@ async function saveLeadFromForm(e) {
     reason: analysis?.reason || ''
   };
   if (!lead.captured_text) { alert('نص العميل مطلوب.'); return; }
+  if (isDuplicateLead(lead.post_url, lead.captured_text)) {
+    alert('الفرصة دي متسجلة قبل كده: نفس الرابط أو نفس النص.');
+    return;
+  }
   state.leads.unshift(lead);
+  if (Number(lead.lead_score || 0) >= 75) { playNotifySound(); notifyLead(lead); }
   if (isConfiguredApi()) await api('saveLead', { lead });
   saveLocal();
   clearLeadForm();
@@ -311,6 +364,7 @@ function renderLeads() {
         ${l.post_url ? `<a target="_blank" rel="noopener" href="${escapeHtml(l.post_url)}"><button class="ghost">فتح</button></a>` : ''}
         <button class="secondary" onclick="copyLeadReply('${l.lead_id}')">نسخ الرد</button>
         <button class="primary" onclick="setLeadStatus('${l.lead_id}', 'تم الرد')">تم الرد</button>
+        <button class="secondary" onclick="setFollowUp('${l.lead_id}', 60)">متابعة بعد ساعة</button>
         <button class="ghost" onclick="setLeadStatus('${l.lead_id}', 'تحول لأوردر')">تحول لأوردر</button>
       </td>
     </tr>`;
@@ -329,9 +383,223 @@ window.setLeadStatus = async function (leadId, status) {
   saveLocal();
   render();
 };
+window.setFollowUp = function (leadId, minutes = 60) {
+  const lead = state.leads.find(l => l.lead_id === leadId);
+  if (!lead) return;
+  lead.status = 'متابعة';
+  lead.follow_up_at = new Date(Date.now() + Number(minutes) * 60000).toISOString();
+  saveLocal();
+  render();
+  showToast(`تم تحديد متابعة بعد ${minutes} دقيقة`);
+};
 
-function render() { renderStats(); renderDueSources(); renderKeywords(); renderLeads(); }
+function render() { renderStats(); renderDueSources(); renderKeywords(); renderLeads(); renderWatcherPanel(); renderProPanel(); renderHotLeads(); }
 
+function requestNotifyPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+}
+
+function notifyDueSources(due) {
+  if (!('Notification' in window) || Notification.permission !== 'granted' || !due.length) return;
+  const title = `صياد العملاء: ${due.length} مصدر للمراجعة`;
+  const body = due.slice(0, 3).map(s => s.source_name).join('، ');
+  new Notification(title, { body, tag: 'matbaagy-lead-hunter' });
+}
+
+function renderWatcherPanel() {
+  const panel = document.getElementById('watcherPanel');
+  if (!panel) return;
+  const settings = getWatcherSettings();
+  const due = getDueSources();
+  const next = state.sources
+    .filter(s => s.active !== false && s.next_check)
+    .sort((a,b) => new Date(a.next_check) - new Date(b.next_check))[0];
+  panel.innerHTML = `
+    <div>
+      <h2>المراقبة شبه الأوتوماتيك — Safe Auto Mode</h2>
+      <p>النظام يفتح بحث فيسبوك الجاهز حسب الجدول والكلمات، ويترك خطوة التقاط النص لك من خلال الإضافة حتى لا يسحب محتوى الجروبات تلقائيًا.</p>
+      <div class="meta watcher-meta">
+        <span class="badge ${settings.enabled ? 'green' : 'red'}">${settings.enabled ? 'شغّال' : 'متوقف'}</span>
+        <span>مصادر مستحقة الآن: ${due.length}</span>
+        <span>أقرب مراجعة: ${next ? fmtDate(next.next_check) : 'لا يوجد'}</span>
+        <span>فتح تلقائي: ${settings.autoOpen ? 'مفعّل' : 'غير مفعّل'}</span>
+        <span>تدوير الكلمات: ${settings.autoCycle ? 'مفعّل' : 'غير مفعّل'}</span>
+      </div>
+    </div>
+    <div class="actions watcher-actions">
+      <button id="btnStartWatcher" class="primary">تشغيل المراقبة</button>
+      <button id="btnStopWatcher" class="secondary">إيقاف</button>
+      <button id="btnOpenNextSearch" class="ghost">افتح البحث التالي</button>
+      <button id="btnOpenBatchSearch" class="ghost">افتح 3 أبحاث</button>
+      <button id="btnToggleAutoOpen" class="secondary">${settings.autoOpen ? 'إيقاف الفتح التلقائي' : 'تفعيل الفتح التلقائي'}</button>
+    </div>`;
+  document.getElementById('btnStartWatcher')?.addEventListener('click', startWatcher);
+  document.getElementById('btnStopWatcher')?.addEventListener('click', stopWatcher);
+  document.getElementById('btnOpenNextSearch')?.addEventListener('click', openNextDueSearch);
+  document.getElementById('btnOpenBatchSearch')?.addEventListener('click', () => openBatchDueSearch(3));
+  document.getElementById('btnToggleAutoOpen')?.addEventListener('click', toggleAutoOpen);
+}
+
+function getTopKeyword(source = null) {
+  if (source) return getNextKeywordForSource(source);
+  return state.keywords.filter(k => k.active !== false).sort((a,b) => b.score_weight - a.score_weight)[0]?.keyword || 'مطبعة';
+}
+
+function openNextDueSearch() {
+  const due = getDueSources();
+  if (!due.length) { showToast('لا توجد مصادر مستحقة الآن'); return; }
+  const s = due[0];
+  const keyword = getTopKeyword(s);
+  const url = buildFacebookSearchUrl(s.source_url, keyword);
+  window.open(url, '_blank', 'noopener');
+  advanceKeywordIndex(s);
+  markChecked(s.source_id);
+  showToast(`تم فتح بحث: ${s.source_name} / ${keyword}`);
+}
+function openBatchDueSearch(limit = 3) {
+  const due = getDueSources().slice(0, limit);
+  if (!due.length) { showToast('لا توجد مصادر مستحقة الآن'); return; }
+  due.forEach((source, idx) => setTimeout(() => {
+    const keyword = getTopKeyword(source);
+    window.open(buildFacebookSearchUrl(source.source_url, keyword), '_blank', 'noopener');
+    advanceKeywordIndex(source);
+    markChecked(source.source_id);
+  }, idx * 900));
+}
+
+function watcherTick() {
+  const settings = getWatcherSettings();
+  if (!settings.enabled) return;
+  const due = getDueSources();
+  if (due.length) {
+    showToast(`عندك ${due.length} مصدر مستحق للمراجعة`);
+    notifyDueSources(due);
+    if (settings.sound) playNotifySound();
+    if (settings.autoOpen) {
+      const last = settings.lastAutoOpenAt ? new Date(settings.lastAutoOpenAt).getTime() : 0;
+      const gap = Math.max(45, Number(settings.openGapSeconds || 75)) * 1000;
+      if (Date.now() - last > gap) {
+        settings.lastAutoOpenAt = nowIso();
+        saveWatcherSettings(settings);
+        openNextDueSearch();
+      }
+    }
+  }
+  render();
+}
+
+function startWatcher() {
+  requestNotifyPermission();
+  const settings = getWatcherSettings();
+  settings.enabled = true;
+  saveWatcherSettings(settings);
+  if (watcherTimer) clearInterval(watcherTimer);
+  watcherTimer = setInterval(watcherTick, 30000);
+  watcherTick();
+  showToast('تم تشغيل المراقبة الآمنة');
+}
+
+function stopWatcher() {
+  const settings = getWatcherSettings();
+  settings.enabled = false;
+  saveWatcherSettings(settings);
+  if (watcherTimer) clearInterval(watcherTimer);
+  watcherTimer = null;
+  render();
+  showToast('تم إيقاف المراقبة');
+}
+
+function toggleAutoOpen() {
+  const settings = getWatcherSettings();
+  settings.autoOpen = !settings.autoOpen;
+  saveWatcherSettings(settings);
+  if (settings.autoOpen) startWatcher(); else render();
+}
+
+
+
+
+function renderProPanel() {
+  const panel = document.getElementById('proPanel');
+  if (!panel) return;
+  const settings = getWatcherSettings();
+  const due = getDueSources();
+  const nextRows = state.sources.filter(s => s.active !== false).sort((a,b) => new Date(a.next_check || 0) - new Date(b.next_check || 0)).slice(0, 6);
+  panel.innerHTML = `
+    <div class="pro-head">
+      <div>
+        <h2>Lead Hunter Pro</h2>
+        <p>طابور بحث ذكي، تدوير كلمات، منع تكرار، تنبيهات، وفرص ساخنة — بدون Scraper مخالف.</p>
+      </div>
+      <div class="pro-switches">
+        <label><input type="checkbox" id="proAutoOpen" ${settings.autoOpen ? 'checked' : ''}> فتح تلقائي</label>
+        <label><input type="checkbox" id="proAutoCycle" ${settings.autoCycle ? 'checked' : ''}> تدوير الكلمات</label>
+        <label><input type="checkbox" id="proSound" ${settings.sound ? 'checked' : ''}> صوت تنبيه</label>
+        <label>فاصل الفتح/ثانية <input id="proOpenGap" type="number" min="45" value="${Number(settings.openGapSeconds || 75)}"></label>
+      </div>
+    </div>
+    <div class="queue-grid">
+      ${nextRows.map(s => `<div class="queue-card">
+        <strong>${escapeHtml(s.source_name)}</strong>
+        <span>${escapeHtml(s.source_type || '')} • ${escapeHtml(s.priority || 'medium')}</span>
+        <small>الكلمة التالية: ${escapeHtml(getNextKeywordForSource(s))}</small>
+        <small>المراجعة: ${fmtDate(s.next_check)}</small>
+        <button class="secondary" onclick="openSourceKeyword('${s.source_id}')">افتح بحثه الآن</button>
+      </div>`).join('') || '<div class="empty">لا توجد مصادر مضافة.</div>'}
+    </div>`;
+  document.getElementById('proAutoOpen')?.addEventListener('change', e => { settings.autoOpen = e.target.checked; saveWatcherSettings(settings); render(); });
+  document.getElementById('proAutoCycle')?.addEventListener('change', e => { settings.autoCycle = e.target.checked; saveWatcherSettings(settings); render(); });
+  document.getElementById('proSound')?.addEventListener('change', e => { settings.sound = e.target.checked; saveWatcherSettings(settings); render(); });
+  document.getElementById('proOpenGap')?.addEventListener('change', e => { settings.openGapSeconds = Math.max(45, Number(e.target.value || 75)); saveWatcherSettings(settings); render(); });
+}
+window.openSourceKeyword = function(sourceId) {
+  const s = state.sources.find(x => x.source_id === sourceId);
+  if (!s) return;
+  const keyword = getNextKeywordForSource(s);
+  window.open(buildFacebookSearchUrl(s.source_url, keyword), '_blank', 'noopener');
+  advanceKeywordIndex(s);
+  markChecked(s.source_id);
+};
+
+function renderHotLeads() {
+  const box = document.getElementById('hotLeadsBox');
+  if (!box) return;
+  const rows = state.leads
+    .filter(l => Number(l.lead_score || 0) >= 70 || (l.follow_up_at && new Date(l.follow_up_at).getTime() <= Date.now()))
+    .sort((a,b) => Number(b.lead_score||0) - Number(a.lead_score||0))
+    .slice(0, 8);
+  if (!rows.length) { box.innerHTML = '<div class="empty">لا توجد فرص ساخنة حاليًا.</div>'; return; }
+  box.innerHTML = rows.map(l => `<article class="hot-card">
+    <div class="hot-score">${Number(l.lead_score || 0)}%</div>
+    <h3>${escapeHtml(l.service || 'فرصة')}</h3>
+    <p>${escapeHtml(l.captured_text || '').slice(0, 150)}</p>
+    <small>${escapeHtml(l.source_name || '-')} • ${fmtDate(l.created_at)}</small>
+    ${l.follow_up_at ? `<small class="follow">متابعة: ${fmtDate(l.follow_up_at)}</small>` : ''}
+    <div class="actions">
+      ${l.post_url ? `<a target="_blank" rel="noopener" href="${escapeHtml(l.post_url)}"><button class="ghost">فتح</button></a>` : ''}
+      <button class="secondary" onclick="copyLeadReply('${l.lead_id}')">نسخ الرد</button>
+      <button class="primary" onclick="setLeadStatus('${l.lead_id}', 'تم الرد')">تم الرد</button>
+    </div>
+  </article>`).join('');
+}
+
+function playNotifySound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
+    osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3);
+  } catch {}
+}
+function notifyLead(lead) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  new Notification('فرصة ساخنة من صياد العملاء 🔥', { body: `${lead.service || 'طباعة'} — ${lead.lead_score}%`, tag: lead.lead_id });
+}
 
 function showToast(message) {
   const old = document.querySelector('.toast');
@@ -370,7 +638,7 @@ function exportLeadsCsv() {
 function backupJson() {
   const payload = {
     app: 'Matbaagy Lead Hunter Standalone',
-    version: '1.1.0',
+    version: '2.0.0-pro',
     exported_at: nowIso(),
     sources: state.sources,
     keywords: state.keywords,
@@ -421,6 +689,8 @@ function setupEvents() {
   document.getElementById('btnExport')?.addEventListener('click', exportLeadsCsv);
   document.getElementById('btnBackup')?.addEventListener('click', backupJson);
   document.getElementById('importFile')?.addEventListener('change', (e) => importJsonFile(e.target.files?.[0]));
+  document.getElementById('btnAskNotify')?.addEventListener('click', requestNotifyPermission);
+  document.getElementById('btnTestSound')?.addEventListener('click', playNotifySound);
   document.getElementById('btnSync').addEventListener('click', syncData);
   document.getElementById('btnAnalyze').addEventListener('click', analyzeCurrentText);
   document.getElementById('leadForm').addEventListener('submit', saveLeadFromForm);
@@ -438,8 +708,10 @@ function setupEvents() {
       source_url: document.getElementById('newSourceUrl').value.trim(),
       source_type: document.getElementById('newSourceType').value,
       access_mode: 'manual', active: true,
-      refresh_minutes: Number(document.getElementById('newRefreshMinutes').value || 30),
+      refresh_minutes: Math.max(10, Number(document.getElementById('newRefreshMinutes').value || 15)),
       priority: document.getElementById('newPriority').value,
+      custom_keywords: document.getElementById('newSourceKeywords')?.value.trim() || '',
+      keyword_index: 0,
       last_checked: '', next_check: nowIso()
     };
     state.sources.unshift(src);
@@ -468,3 +740,4 @@ seedIfEmpty();
 applyCaptureParams();
 render();
 setInterval(render, 60000);
+if (getWatcherSettings().enabled) startWatcher();

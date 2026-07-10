@@ -158,3 +158,34 @@ tr:last-child td { border-bottom: 0; }
   font-weight: 800;
 }
 @media (max-width: 900px) { .standalone-status { flex-direction: column; align-items: flex-start; } }
+
+.watcher-panel { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-color: rgba(0,91,255,.22); background: linear-gradient(135deg, #ffffff, #f3f7ff); }
+.watcher-panel h2 { margin: 0 0 6px; }
+.watcher-panel p { margin: 0 0 10px; color: var(--gray); max-width: 850px; }
+.watcher-meta { margin-top: 8px; }
+.watcher-actions { justify-content: flex-start; }
+.toast { position: fixed; left: 22px; bottom: 22px; z-index: 9999; background: #111111; color: #fff; padding: 12px 16px; border-radius: 14px; box-shadow: 0 12px 35px rgba(17,17,17,.22); font-weight: 800; }
+@media (max-width: 900px) { .watcher-panel { flex-direction: column; align-items: flex-start; } }
+
+/* Lead Hunter Pro */
+.pro-panel {
+  border-color: rgba(255,106,0,.28);
+  background: linear-gradient(135deg, #ffffff, #fff7ed);
+}
+.pro-head { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; margin-bottom: 14px; }
+.pro-head h2 { margin: 0 0 6px; font-size: 24px; color: var(--black); }
+.pro-head p { margin: 0; color: var(--gray); font-weight: 800; }
+.pro-switches { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.pro-switches label { display: flex; align-items: center; gap: 7px; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; font-size: 13px; white-space: nowrap; }
+.pro-switches input[type="number"] { width: 78px; padding: 6px 8px; border-radius: 9px; }
+.queue-grid, .hot-leads-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(245px, 1fr)); gap: 12px; }
+.queue-card, .hot-card { border: 1px solid var(--line); border-radius: 16px; padding: 14px; background: #fff; display: grid; gap: 7px; box-shadow: 0 8px 24px rgba(17,17,17,.035); }
+.queue-card strong, .hot-card h3 { font-weight: 900; margin: 0; }
+.queue-card span, .queue-card small, .hot-card small { color: var(--gray); font-weight: 800; }
+.hot-card { position: relative; overflow: hidden; }
+.hot-card::before { content: ""; position: absolute; inset-inline-start: 0; top: 0; bottom: 0; width: 5px; background: var(--orange); }
+.hot-card p { margin: 0; color: #2b3140; line-height: 1.7; }
+.hot-score { width: fit-content; padding: 4px 10px; border-radius: 999px; background: #eaf8ef; color: var(--success); font-weight: 900; }
+.follow { color: var(--orange) !important; }
+.hot-leads-panel { background: linear-gradient(180deg, #ffffff, #fbfdff); }
+@media (max-width: 900px) { .pro-head { flex-direction: column; } .pro-switches { width: 100%; } }
