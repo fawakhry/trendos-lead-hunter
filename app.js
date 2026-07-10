@@ -185,6 +185,7 @@ function renderDueSources() {
       <div class="actions">
         <a target="_blank" rel="noopener" href="${escapeHtml(s.source_url)}"><button class="primary">فتح المصدر</button></a>
         <button class="ghost" onclick="markChecked('${s.source_id}')">تمت المراجعة</button>
+        <button class="danger" onclick="deleteSource('${s.source_id}')">حذف</button>
       </div>
       <div class="search-buttons">
         ${getSourceKeywords(s).slice(0, 8).map(keyword => `<a target="_blank" rel="noopener" href="${buildFacebookSearchUrl(s.source_url, keyword)}"><button class="secondary">${escapeHtml(keyword)}</button></a>`).join('')}
@@ -203,6 +204,29 @@ async function markChecked(sourceId) {
   render();
 }
 window.markChecked = markChecked;
+
+async function deleteSource(sourceId) {
+  const s = state.sources.find(x => x.source_id === sourceId);
+  if (!s) return;
+  const ok = confirm(`حذف المصدر: ${s.source_name || 'بدون اسم'}؟\nلن يتم حذف الفرص القديمة، سيتم حذف المصدر فقط.`);
+  if (!ok) return;
+  state.sources = state.sources.filter(x => x.source_id !== sourceId);
+  saveLocal();
+  render();
+  showToast('تم حذف المصدر');
+}
+window.deleteSource = deleteSource;
+
+function toggleSourceActive(sourceId) {
+  const s = state.sources.find(x => x.source_id === sourceId);
+  if (!s) return;
+  s.active = s.active === false;
+  saveLocal();
+  render();
+  showToast(s.active ? 'تم تفعيل المصدر' : 'تم إيقاف المصدر');
+}
+window.toggleSourceActive = toggleSourceActive;
+
 
 function renderKeywords() {
   const el = document.getElementById('keywordsList');
@@ -525,7 +549,7 @@ function renderProPanel() {
   if (!panel) return;
   const settings = getWatcherSettings();
   const due = getDueSources();
-  const nextRows = state.sources.filter(s => s.active !== false).sort((a,b) => new Date(a.next_check || 0) - new Date(b.next_check || 0)).slice(0, 6);
+  const nextRows = state.sources.slice().sort((a,b) => new Date(a.next_check || 0) - new Date(b.next_check || 0)).slice(0, 12);
   panel.innerHTML = `
     <div class="pro-head">
       <div>
@@ -545,7 +569,11 @@ function renderProPanel() {
         <span>${escapeHtml(s.source_type || '')} • ${escapeHtml(s.priority || 'medium')}</span>
         <small>الكلمة التالية: ${escapeHtml(getNextKeywordForSource(s))}</small>
         <small>المراجعة: ${fmtDate(s.next_check)}</small>
-        <button class="secondary" onclick="openSourceKeyword('${s.source_id}')">افتح بحثه الآن</button>
+        <div class="actions">
+          <button class="secondary" onclick="openSourceKeyword('${s.source_id}')">افتح بحثه الآن</button>
+          <button class="ghost" onclick="toggleSourceActive('${s.source_id}')">${s.active === false ? 'تفعيل' : 'إيقاف'}</button>
+          <button class="danger" onclick="deleteSource('${s.source_id}')">حذف</button>
+        </div>
       </div>`).join('') || '<div class="empty">لا توجد مصادر مضافة.</div>'}
     </div>`;
   document.getElementById('proAutoOpen')?.addEventListener('change', e => { settings.autoOpen = e.target.checked; saveWatcherSettings(settings); render(); });
@@ -700,6 +728,7 @@ function setupEvents() {
 
   const sourceDialog = document.getElementById('sourceDialog');
   document.getElementById('btnAddSource').addEventListener('click', () => sourceDialog.showModal());
+  document.getElementById('cancelSourceBtn')?.addEventListener('click', () => { document.getElementById('sourceForm').reset(); sourceDialog.close(); });
   document.getElementById('sourceForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const src = {
@@ -721,6 +750,7 @@ function setupEvents() {
 
   const keywordDialog = document.getElementById('keywordDialog');
   document.getElementById('btnAddKeyword').addEventListener('click', () => keywordDialog.showModal());
+  document.getElementById('cancelKeywordBtn')?.addEventListener('click', () => { document.getElementById('keywordForm').reset(); keywordDialog.close(); });
   document.getElementById('keywordForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const kw = {
