@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TrendOS | صياد العملاء</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="brand-sidebar" aria-label="Trend Mall sidebar">
+      <div class="brand-lockup">
+        <div class="brand-wordmark">مطبعجي</div>
+        <div class="brand-sub">Trend <span>Mall</span></div>
+        <div class="brand-tagline"><i></i>فكرتك جاهزة<i></i></div>
+      </div>
+
+      <nav class="side-nav">
+        <a class="active" href="#"><span>⌂</span>الرئيسية</a>
+        <a href="#dueSources"><span>👥</span>المصادر</a>
+        <a href="#leadForm"><span>🔖</span>حفظ فرصة</a>
+        <a href="#leadsTbody"><span>📦</span>صندوق الفرص</a>
+        <a href="#keywordsList"><span>🔥</span>الكلمات الساخنة</a>
+        <a href="#"><span>⚙</span>الإعدادات</a>
+      </nav>
+
+      <div class="mini-brand-card">
+        <div class="m-mark">M</div>
+        <strong>مطبعجي</strong>
+        <span>Trend Mall</span>
+        <small>فكرتك جاهزة</small>
+      </div>
+
+      <div class="sidebar-footer">
+        <p>Trend Mall - مطبعجي بنها</p>
+        <p>0100 123 4567</p>
+        <p>trendmall.net</p>
+      </div>
+    </aside>
+
+    <div class="content-area">
+      <header class="topbar">
+        <div class="hero-copy">
+          <div class="eyebrow">TrendOS Lead Hunter</div>
+          <h1>صياد العملاء</h1>
+          <p>مراجعة صفحات وجروبات فيسبوك، حفظ الفرص، وتحليلها بردود جاهزة لمطبعجي.</p>
+        </div>
+        <div class="target-mark" aria-hidden="true">
+          <span>🎯</span>
+        </div>
+        <div class="top-actions">
+          <button id="btnSync" class="primary">تحديث البيانات</button>
+          <button id="btnSeed" class="secondary">بيانات تجربة</button>
+          <button id="btnExport" class="secondary">تصدير CSV</button>
+          <label class="file-action secondary" for="importFile">استيراد JSON<input id="importFile" type="file" accept="application/json,.json" hidden></label>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="stats-grid" id="statsGrid"></section>
+
+        <section class="panel standalone-status">
+          <div>
+            <h2>وضع التشغيل: مستقل فعّال</h2>
+            <p>البيانات محفوظة داخل المتصفح باستخدام LocalStorage. ارفع الملفات على GitHub Pages وسيعمل البرنامج بدون TrendOS. يمكن ربط Google Apps Script لاحقًا من config.js.</p>
+          </div>
+          <button id="btnBackup" class="ghost">نسخة احتياطية JSON</button>
+        </section>
+
+        <section class="panel sources-panel">
+          <div class="panel-header">
+            <div>
+              <h2>مصادر مستحقة للمراجعة</h2>
+              <p>كل مصدر عليه معاد مراجعة كل 30 دقيقة أو حسب الإعداد.</p>
+            </div>
+            <button id="btnAddSource" class="primary">+ مصدر جديد</button>
+          </div>
+          <div id="dueSources" class="cards"></div>
+        </section>
+
+        <section class="split">
+          <div class="panel save-panel">
+            <div class="panel-header">
+              <h2>حفظ فرصة</h2>
+              <button id="btnAnalyze" class="primary blue-action">حلّل النص</button>
+            </div>
+            <form id="leadForm" class="form">
+              <label>رابط البوست/الكومنت
+                <input id="postUrl" type="url" placeholder="https://facebook.com/...">
+              </label>
+              <label>اسم المصدر
+                <input id="sourceName" type="text" placeholder="مثال: جروب خدمات بنها">
+              </label>
+              <label>نص العميل
+                <textarea id="capturedText" rows="7" placeholder="انسخ نص البوست أو الكومنت هنا..."></textarea>
+              </label>
+              <div class="form-row">
+                <label>المسؤول
+                  <select id="assignedTo">
+                    <option>ضياء</option>
+                    <option>رحمه</option>
+                    <option>ريفان</option>
+                    <option>وائل</option>
+                    <option>جابر</option>
+                  </select>
+                </label>
+                <label>الحالة
+                  <select id="status">
+                    <option>جديد</option>
+                    <option>تم الرد</option>
+                    <option>متابعة</option>
+                    <option>غير مناسب</option>
+                    <option>تحول لأوردر</option>
+                  </select>
+                </label>
+              </div>
+              <div class="actions">
+                <button type="submit" class="primary">حفظ الفرصة</button>
+                <button type="button" id="btnClearLead" class="secondary">تفريغ</button>
+              </div>
+            </form>
+            <div id="analysisBox" class="analysis-box hidden"></div>
+          </div>
+
+          <div class="panel keywords-panel">
+            <div class="panel-header">
+              <h2>الكلمات الساخنة</h2>
+              <button id="btnAddKeyword" class="secondary">+ كلمة</button>
+            </div>
+            <div id="keywordsList" class="chips"></div>
+          </div>
+        </section>
+
+        <section class="panel leads-panel">
+          <div class="panel-header">
+            <div>
+              <h2>صندوق الفرص</h2>
+              <p>الفرص الأعلى من 75 تظهر كأولوية عالية.</p>
+            </div>
+            <div class="filters">
+              <input id="leadSearch" type="search" placeholder="بحث في الفرص...">
+              <select id="leadStatusFilter">
+                <option value="">كل الحالات</option>
+                <option>جديد</option>
+                <option>تم الرد</option>
+                <option>متابعة</option>
+                <option>غير مناسب</option>
+                <option>تحول لأوردر</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>الوقت</th>
+                  <th>المصدر</th>
+                  <th>النص</th>
+                  <th>الخدمة</th>
+                  <th>الدرجة</th>
+                  <th>الحالة</th>
+                  <th>إجراءات</th>
+                </tr>
+              </thead>
+              <tbody id="leadsTbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <footer class="app-footer">© 2026 مطبعجي - Trend Mall. جميع الحقوق محفوظة.</footer>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="sourceDialog" class="dialog">
+    <form method="dialog" id="sourceForm">
+      <h3>إضافة مصدر</h3>
+      <label>اسم المصدر
+        <input id="newSourceName" required placeholder="مثال: جروب خدمات بنها">
+      </label>
+      <label>رابط المصدر
+        <input id="newSourceUrl" type="url" required placeholder="https://facebook.com/groups/...">
+      </label>
+      <div class="form-row">
+        <label>النوع
+          <select id="newSourceType">
+            <option value="group">جروب</option>
+            <option value="page">صفحة</option>
+            <option value="search">بحث</option>
+          </select>
+        </label>
+        <label>كل كام دقيقة؟
+          <input id="newRefreshMinutes" type="number" min="10" value="30">
+        </label>
+      </div>
+      <label>الأولوية
+        <select id="newPriority">
+          <option value="high">عالية</option>
+          <option value="medium">متوسطة</option>
+          <option value="low">منخفضة</option>
+        </select>
+      </label>
+      <div class="actions">
+        <button value="cancel" class="secondary">إلغاء</button>
+        <button id="saveSourceBtn" value="default" class="primary">حفظ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="keywordDialog" class="dialog">
+    <form method="dialog" id="keywordForm">
+      <h3>إضافة كلمة مفتاحية</h3>
+      <label>الكلمة
+        <input id="newKeyword" required placeholder="مثال: حد يعرف مطبعة">
+      </label>
+      <div class="form-row">
+        <label>التصنيف
+          <select id="newKeywordCategory">
+            <option>شراء</option>
+            <option>خدمة</option>
+            <option>مدينة</option>
+          </select>
+        </label>
+        <label>الوزن
+          <input id="newKeywordWeight" type="number" min="1" max="100" value="80">
+        </label>
+      </div>
+      <div class="actions">
+        <button value="cancel" class="secondary">إلغاء</button>
+        <button id="saveKeywordBtn" value="default" class="primary">حفظ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
